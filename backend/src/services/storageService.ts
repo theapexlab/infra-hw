@@ -2,12 +2,14 @@ import { config } from '../config/env';
 import crypto from 'crypto';
 import path from 'path';
 import { minioClient } from '../config/storage';
+import { createLogger } from '../utils/logger';
+import { PresignedUrlResponse } from 'shared-types';
 
 const BUCKET_NAME = config.storage.bucket;
 
-/**
- * Generate a unique filename for uploaded media
- */
+const logger = createLogger('storage-service');
+
+// Generate unique filename for uploads
 export const generateUniqueFilename = (originalName: string): string => {
   const ext = path.extname(originalName);
   const timestamp = Date.now();
@@ -15,13 +17,11 @@ export const generateUniqueFilename = (originalName: string): string => {
   return `${timestamp}-${randomString}${ext}`;
 };
 
-/**
- * Generate a presigned URL for direct browser uploads to MinIO
- */
+// Generate presigned URL for direct browser-to-MinIO uploads
 export const generatePresignedUrl = async (
   originalFilename: string,
   contentType: string
-): Promise<{ presignedUrl: string; objectName: string }> => {
+): Promise<PresignedUrlResponse> => {
   // Generate a unique filename for the object
   const objectName = generateUniqueFilename(originalFilename);
 
@@ -39,33 +39,43 @@ export const generatePresignedUrl = async (
       60 * 60 // 1 hour expiry
     );
     
-    console.log(`Generated presigned URL: ${presignedUrl}`);
-    console.log(` - Object name: ${objectName}`);
-    console.log(` - Content type: ${contentType}`);
+    logger.info(`Generated presigned URL for direct upload`, {
+      objectName,
+      contentType,
+      expirySeconds: 60 * 60
+    });
     
     return {
       presignedUrl,
-      objectName
+      objectName,
+      mediaId: '' // This will be populated by the calling code
     };
   } catch (error) {
-    console.error('Error generating presigned URL:', error);
+    logger.error('Error generating presigned URL', error);
     throw new Error(`Failed to generate presigned URL: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
-/**
- * Generate a public URL for accessing the uploaded media
- */
+// Create Nginx-proxied URL for media access
 export const generatePublicUrl = (objectName: string): string => {
   // Generate URL that will be served through Nginx proxy to MinIO
   return `/media-sharing/${objectName}`;
 };
 
-/**
- * Store an object in the storage (for server-side uploads)
- */
+// Store object in MinIO (server-side uploads)
 export const storeObject = async (objectName: string, buffer: Buffer, contentType: string): Promise<void> => {
-  await minioClient.putObject(BUCKET_NAME, objectName, buffer, {
-    'Content-Type': contentType,
-  });
+  try {
+    await minioClient.putObject(BUCKET_NAME, objectName, buffer, {
+      'Content-Type': contentType,
+    });
+    
+    logger.info(`Stored object in MinIO`, {
+      objectName, 
+      contentType, 
+      sizeBytes: buffer.length
+    });
+  } catch (error) {
+    logger.error(`Failed to store object in MinIO`, { objectName, error });
+    throw error;
+  }
 };

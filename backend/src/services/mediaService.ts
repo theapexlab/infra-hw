@@ -3,22 +3,21 @@ import { minioClient, BUCKET_NAME } from '../config/storage';
 import { config } from '../config/env';
 import { generatePublicUrl, generateUniqueFilename } from './storageService';
 import { generateVideoThumbnail } from './thumbnailService';
-import type { MediaItem, PaginatedResponse } from 'shared-types';
+import type { MediaItem, PaginatedResponse, ThumbnailOptions } from 'shared-types';
 import path from 'path';
 import { Readable } from 'stream';
+import { createLogger } from '../utils/logger';
 
-// Using generateUniqueFilename from storageService instead of duplicating it here
+const logger = createLogger('media-service');
 
-/**
- * Determine if file is a video based on mimetype
- */
+// Using shared filename generator
+
+// Check if file is video
 const isVideo = (mimetype: string): boolean => {
   return mimetype.startsWith('video/');
 };
 
-/**
- * Get media items with pagination
- */
+// Get paginated media items
 export const getMediaItems = async (
   page: number = 1, 
   limit: number = 12
@@ -91,10 +90,7 @@ export const getMediaItems = async (
   };
 };
 
-/**
- * Fetch file from MinIO storage
- * @param objectName The name of the object in MinIO
- */
+// Fetch file from MinIO storage
 const fetchFromMinio = async (objectName: string): Promise<Buffer> => {
   return new Promise((resolve, reject) => {
     let data: Buffer[] = [];
@@ -128,17 +124,24 @@ const ensureVideoThumbnail = async (mediaItem: any): Promise<string | null> => {
   }
   
   try {
-    console.log(`Generating thumbnail on-demand for video: ${mediaItem.id}`);
+    logger.info(`Generating thumbnail on-demand for video: ${mediaItem.id}`);
     
     // Extract object name from URL (assuming URL format is /media-sharing/objectName)
     const objectName = mediaItem.url.replace('/media-sharing/', '');
     
     // Fetch video content from MinIO
     const videoBuffer = await fetchFromMinio(objectName);
-    console.log(`Fetched video content for thumbnail generation: ${objectName} (${videoBuffer.length} bytes)`);
+    logger.debug(`Fetched video content for thumbnail generation: ${objectName} (${videoBuffer.length} bytes)`);
     
-    // Generate thumbnail
-    const thumbnailName = await generateVideoThumbnail(videoBuffer, objectName);
+    // Generate thumbnail with options
+    const thumbnailOptions: ThumbnailOptions = {
+      timeMarkSeconds: 1,
+      format: 'jpg' as 'jpg', // Type assertion to tell TypeScript this is specifically the literal 'jpg'
+      width: 320,  // Reasonable thumbnail width
+      height: 180  // 16:9 aspect ratio
+    };
+    
+    const thumbnailName = await generateVideoThumbnail(videoBuffer, objectName, thumbnailOptions);
     const thumbnailUrl = generatePublicUrl(thumbnailName);
     
     // Update database record with new thumbnail URL
@@ -146,11 +149,11 @@ const ensureVideoThumbnail = async (mediaItem: any): Promise<string | null> => {
       .where('id', mediaItem.id)
       .update({ thumbnail_url: thumbnailUrl });
     
-    console.log(`Generated on-demand thumbnail for video ${mediaItem.id}: ${thumbnailUrl}`);
+    logger.info(`Generated on-demand thumbnail for video ${mediaItem.id}: ${thumbnailUrl}`);
     
     return thumbnailUrl;
   } catch (error) {
-    console.error(`Failed to generate thumbnail for video ${mediaItem.id}:`, error);
+    logger.error(`Failed to generate thumbnail for video ${mediaItem.id}`, error);
     return null;
   }
 };

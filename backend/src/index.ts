@@ -1,35 +1,36 @@
-// Register module aliases first before other imports
-import './aliases';
+import './aliases'; // Must be first
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
+import { logger as honoLogger } from 'hono/logger';
 import { initializeStorage } from './config/storage';
 import { config } from './config/env';
 import mediaRouter from './routes/mediaRoutes';
 import commentRouter from './routes/commentRoutes';
+import { createLogger } from './utils/logger';
 
-// Create the main Hono app
 const app = new Hono();
+const appLogger = createLogger('app-server');
 
-// Apply middleware
-app.use('*', logger());
+app.use('*', honoLogger());
 
-// Use a more permissive CORS configuration
+// CORS configuration
 app.use('*', cors({
-  origin: '*', // Allow all origins
-  allowHeaders: ['*'], // Allow all headers
+  origin: '*',
+  allowHeaders: ['*'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   exposeHeaders: ['Content-Length', 'Content-Type'],
   maxAge: 86400,
   credentials: true,
 }));
 
-// Add a middleware to log all requests
+// Request logging
 app.use('*', async (c, next) => {
-  console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`);
-  console.log('Headers:', c.req.header());
+  appLogger.info(`${c.req.method} ${c.req.url}`, {
+    headers: c.req.header(),
+    ip: c.req.header('x-forwarded-for') || c.req.header('x-real-ip')
+  });
   await next();
 });
 
@@ -37,21 +38,20 @@ app.use('*', async (c, next) => {
 app.get('/', (c) => c.json({ status: 'ok', message: 'Media Sharing API is running' }));
 app.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
-// Mount routers
+// API routes
 app.route('/api/media', mediaRouter);
 app.route('/api/comments', commentRouter);
 
-// Error handling
 app.onError((err, c) => {
-  console.error('Unhandled error:', err);
+  appLogger.error('Unhandled error', err);
   return c.json({ error: 'Internal server error' }, 500);
 });
 
-// Server startup
 const PORT = config.server.port;
 
-// Function to check if migrations have been run
 const runMigrations = async () => {
+  const dbLogger = createLogger('database-migrations');
+  
   try {
     const knex = require('knex');
     const { knexConfig } = require('./config/knexConfig');
@@ -62,19 +62,19 @@ const runMigrations = async () => {
     const hasTable = await db.schema.hasTable('knex_migrations');
     
     if (!hasTable) {
-      console.log('Migrations have not been run yet, running now...');
+      dbLogger.info('Migrations have not been run yet, running now...');
       await db.migrate.latest();
-      console.log('Migrations completed successfully');
+      dbLogger.info('Migrations completed successfully');
     } else {
       // Check if there are pending migrations
       const [_, pendingMigrations] = await db.migrate.list();
       
       if (pendingMigrations.length > 0) {
-        console.log(`Found ${pendingMigrations.length} pending migrations, running now...`);
+        dbLogger.info(`Found ${pendingMigrations.length} pending migrations, running now...`);
         await db.migrate.latest();
-        console.log('Migrations completed successfully');
+        dbLogger.info('Migrations completed successfully');
       } else {
-        console.log('Database schema is up to date');
+        dbLogger.info('Database schema is up to date');
       }
     }
     
@@ -82,19 +82,16 @@ const runMigrations = async () => {
     await db.destroy();
     return true;
   } catch (error) {
-    console.error('Error checking/running migrations:', error);
+    dbLogger.error('Error checking/running migrations', error);
     throw error;
   }
 };
 
 const startServer = async () => {
   try {
-    // Run database migrations if needed
     await runMigrations();
-    
-    // Initialize MinIO storage (create bucket if it doesn't exist)
     await initializeStorage();
-    console.log('Storage initialized successfully');
+    appLogger.info('Storage initialized successfully');
     
     // Start the server
     serve({
@@ -102,12 +99,15 @@ const startServer = async () => {
       port: Number(PORT)
     });
     
-    console.log(`Server is running on http://localhost:${PORT}`);
+    appLogger.info(`Server is running on http://localhost:${PORT}`, {
+      port: PORT,
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version
+    });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    appLogger.error('Failed to start server', error);
     process.exit(1);
   }
 };
 
-// Start the server
 startServer();

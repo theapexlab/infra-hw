@@ -50,3 +50,58 @@ export interface CommentCreateRequest {
   author: string;
   content: string;
 }
+
+/**
+ * Storage configuration interface
+ */
+export interface StorageConfig {
+  endPoint: string;
+  port: number;
+  useSSL: boolean;
+  accessKey: string;
+  secretKey: string;
+  bucket: string;
+  region: string;
+  publicUrl: string;
+  internalEndpoint?: string;
+}
+
+/**
+ * Response for presigned URL generation
+ */
+export interface PresignedUrlResponse {
+  presignedUrl: string;
+  mediaId: string;
+  objectName: string;
+}
+
+/**
+ * Thumbnail generation options
+ */
+export interface ThumbnailOptions {
+  timeMarkSeconds?: number;
+  format?: 'jpg' | 'png';
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Log levels for application logging
+ */
+export enum LogLevel {
+  DEBUG = 'DEBUG',
+  INFO = 'INFO',
+  WARN = 'WARN',
+  ERROR = 'ERROR'
+}
+
+/**
+ * Log message structure
+ */
+export interface LogMessage {
+  timestamp: string;
+  level: LogLevel;
+  service: string;
+  message: string;
+  data?: any;
+}

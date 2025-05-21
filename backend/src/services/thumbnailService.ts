@@ -4,73 +4,85 @@ import os from 'os';
 import ffmpeg from 'fluent-ffmpeg';
 import { minioClient, BUCKET_NAME } from '../config/storage';
 import { generateUniqueFilename } from './storageService';
+import { createLogger } from '../utils/logger';
+import { ThumbnailOptions } from 'shared-types';
 
-// Configure logging for debugging
-const logThumbnailOperation = (message: string, data?: any) => {
-  console.log(`[THUMBNAIL SERVICE] ${message}`, data ? data : '');
-};
+const logger = createLogger('thumbnail-service');
 
 /**
  * Generate a thumbnail from a video buffer
- * @param videoBuffer - Buffer containing the video data
- * @param originalFilename - Original filename of the video
- * @returns Promise resolving to the thumbnail object name in MinIO
  */
 export const generateVideoThumbnail = async (
   videoBuffer: Buffer,
-  originalFilename: string
+  originalFilename: string,
+  options?: ThumbnailOptions
 ): Promise<string> => {
+  // Set default options
+  const {
+    timeMarkSeconds = 1,
+    format = 'jpg',
+    width,
+    height
+  } = options || {};
   // Create temporary files for processing with more unique names
   const tempDir = os.tmpdir();
   const uniqueId = Date.now() + '-' + Math.random().toString(36).substring(2, 10);
   const tempVideoPath = path.join(tempDir, `temp-video-${uniqueId}`);
-  const tempThumbnailPath = path.join(tempDir, `temp-thumbnail-${uniqueId}.jpg`);
+  const tempThumbnailPath = path.join(tempDir, `temp-thumbnail-${uniqueId}.${format}`);
   
-  logThumbnailOperation(`Starting thumbnail generation for ${originalFilename}`);
-  logThumbnailOperation(`Temp video path: ${tempVideoPath}`);
-  logThumbnailOperation(`Temp thumbnail path: ${tempThumbnailPath}`);
+  logger.info(`Starting thumbnail generation for ${originalFilename}`, { options });
+  logger.debug(`Temp video path: ${tempVideoPath}`);
+  logger.debug(`Temp thumbnail path: ${tempThumbnailPath}`);
   
   try {
     // Write the video buffer to a temporary file
     fs.writeFileSync(tempVideoPath, videoBuffer);
-    logThumbnailOperation(`Video buffer written to temporary file (${videoBuffer.length} bytes)`);
+    logger.debug(`Video buffer written to temporary file (${videoBuffer.length} bytes)`);
     
-    // Generate thumbnail filename (use jpg extension for thumbnails)
-    const thumbnailName = generateUniqueFilename(originalFilename.replace(/\.\w+$/, '.jpg'));
-    logThumbnailOperation(`Generated thumbnail name: ${thumbnailName}`);
+    // Generate thumbnail filename with the specified format
+    const thumbnailName = generateUniqueFilename(originalFilename.replace(/\.\w+$/, `.${format}`));
+    logger.debug(`Generated thumbnail name: ${thumbnailName}`);
     
     // Check if FFmpeg is available by running a simple command
     try {
       const ffmpegVersion = require('child_process').execSync('ffmpeg -version').toString();
-      logThumbnailOperation(`FFmpeg is available: ${ffmpegVersion.split('\n')[0]}`);
+      logger.debug(`FFmpeg is available: ${ffmpegVersion.split('\n')[0]}`);
     } catch (ffmpegCheckError) {
-      console.error('FFmpeg is not available:', ffmpegCheckError);
+      logger.error('FFmpeg is not available', ffmpegCheckError);
       throw new Error('FFmpeg is not available on the system. Cannot generate thumbnails.');
     }
     
     // Create a promise to handle the async ffmpeg processing
     await new Promise<void>((resolve, reject) => {
-      ffmpeg(tempVideoPath)
+      // Configure FFmpeg command with options
+      const ffmpegCommand = ffmpeg(tempVideoPath)
         .on('start', (commandLine) => {
-          logThumbnailOperation(`FFmpeg process started with command: ${commandLine}`);
+          logger.debug(`FFmpeg process started with command: ${commandLine}`);
         })
         .on('progress', (progress) => {
-          logThumbnailOperation(`FFmpeg progress: ${JSON.stringify(progress)}`);
+          logger.debug(`FFmpeg progress`, progress);
         })
         .on('error', (err) => {
-          console.error('Error generating thumbnail:', err);
+          logger.error('Error generating thumbnail', err);
           reject(err);
         })
         .on('end', () => {
-          logThumbnailOperation('FFmpeg processing completed successfully');
+          logger.info('FFmpeg processing completed successfully');
           resolve();
-        })
-        .screenshots({
-          count: 1,
-          folder: tempDir,
-          filename: path.basename(tempThumbnailPath),
-          timemarks: ['00:00:01'] // Take screenshot at 1 second for better chance of getting a frame
         });
+      
+      // Apply custom size if provided
+      if (width || height) {
+        ffmpegCommand.size(`${width || '?'}x${height || '?'}`);
+      }
+      
+      // Take screenshot with configured options
+      ffmpegCommand.screenshots({
+        count: 1,
+        folder: tempDir,
+        filename: path.basename(tempThumbnailPath),
+        timemarks: [`00:00:${String(timeMarkSeconds).padStart(2, '0')}`]
+      });
     });
     
     // Verify the thumbnail was created
@@ -80,7 +92,10 @@ export const generateVideoThumbnail = async (
     
     // Read the generated thumbnail
     const thumbnailBuffer = fs.readFileSync(tempThumbnailPath);
-    logThumbnailOperation(`Read thumbnail into buffer (${thumbnailBuffer.length} bytes)`);
+    logger.debug(`Read thumbnail into buffer (${thumbnailBuffer.length} bytes)`);
+    
+    // Determine content type based on format
+    const contentType = format === 'png' ? 'image/png' : 'image/jpeg';
     
     // Upload thumbnail to MinIO
     await minioClient.putObject(
@@ -88,30 +103,29 @@ export const generateVideoThumbnail = async (
       thumbnailName,
       thumbnailBuffer,
       {
-        'Content-Type': 'image/jpeg',
+        'Content-Type': contentType,
       }
     );
     
-    logThumbnailOperation(`Successfully uploaded thumbnail to MinIO: ${thumbnailName}`);
+    logger.info(`Successfully uploaded thumbnail to MinIO: ${thumbnailName}`);
     
     return thumbnailName;
   } catch (error) {
-    console.error('Failed to generate thumbnail:', error);
-    logThumbnailOperation(`Error generating thumbnail: ${error instanceof Error ? error.message : String(error)}`);
+    logger.error('Failed to generate thumbnail', error);
     throw error;
   } finally {
     // Clean up temporary files
     try {
       if (fs.existsSync(tempVideoPath)) {
         fs.unlinkSync(tempVideoPath);
-        logThumbnailOperation(`Cleaned up temporary video file: ${tempVideoPath}`);
+        logger.debug(`Cleaned up temporary video file: ${tempVideoPath}`);
       }
       if (fs.existsSync(tempThumbnailPath)) {
         fs.unlinkSync(tempThumbnailPath);
-        logThumbnailOperation(`Cleaned up temporary thumbnail file: ${tempThumbnailPath}`);
+        logger.debug(`Cleaned up temporary thumbnail file: ${tempThumbnailPath}`);
       }
     } catch (cleanupError) {
-      console.error('Error cleaning up temporary files:', cleanupError);
+      logger.error('Error cleaning up temporary files', cleanupError);
     }
   }
 };
