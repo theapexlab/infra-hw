@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { MediaItem, Comment } from 'shared-types';
 import { mediaApi } from '../../services/api';
 import '../../styles/MediaDetail.css';
@@ -12,6 +12,25 @@ export const MediaDetail = ({ media, onClose }: MediaDetailProps) => {
   const [comments, setComments] = useState<Comment[]>(media.comments);
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('');
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+
+  // Fetch fresh comments when component mounts
+  useEffect(() => {
+    const fetchComments = async () => {
+      setIsLoadingComments(true);
+      try {
+        // Use the comments endpoint to get the latest comments
+        const freshComments = await mediaApi.getCommentsByMediaId(media.id);
+        setComments(freshComments);
+      } catch (error) {
+        console.error('Failed to fetch latest comments:', error);
+      } finally {
+        setIsLoadingComments(false);
+      }
+    };
+    
+    fetchComments();
+  }, [media.id]);
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,13 +98,15 @@ export const MediaDetail = ({ media, onClose }: MediaDetailProps) => {
               </form>
               
               <div className="comments-list">
-                {comments.length > 0 ? (
+                {isLoadingComments ? (
+                  <p className="loading-comments">Loading comments...</p>
+                ) : comments.length > 0 ? (
                   comments.map((comment) => (
                     <div key={comment.id} className="comment">
                       <div className="comment-header">
                         <span className="comment-author">{comment.author}</span>
                         <span className="comment-date">
-                          {new Date(comment.createdAt).toLocaleDateString()}
+                          {new Date(comment.createdAt).toLocaleString()}
                         </span>
                       </div>
                       <p className="comment-content">{comment.content}</p>

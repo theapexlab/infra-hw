@@ -42,28 +42,35 @@ export const MediaUpload = ({ onUploadSuccess, onCancel }: MediaUploadProps) => 
       return;
     }
 
+    setIsUploading(true);
+    setError(null);
+    
+    console.log('Starting upload with unified token-based approach');
+    console.log('File details:', { name: file.name, size: file.size, type: file.type });
+    console.log('Metadata:', { uploaderName, description });
+    
     try {
-      setIsUploading(true);
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('uploaderName', uploaderName);
-      formData.append('description', description);
-      formData.append('type', file.type.startsWith('image/') ? 'image' : 'video');
-      
-      await mediaApi.uploadMedia(formData);
-      
+      // Use the mediaApi service which handles token generation and upload in one flow
+      const result = await mediaApi.uploadMedia(file, uploaderName, description);
+      console.log('Upload successful:', result);
       setIsUploading(false);
       onUploadSuccess();
     } catch (error) {
       console.error('Upload failed:', error);
-      setError('Failed to upload media. Please try again.');
+      let errorMessage = 'Upload failed';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'object' && error !== null && 'message' in error) {
+        errorMessage = String(error.message);
+      }
+      
+      setError(errorMessage);
       setIsUploading(false);
     }
   };
 
   const handleCancel = () => {
-    // Clean up any preview URLs before canceling
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }

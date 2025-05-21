@@ -5,6 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
+    "build:migrations": "tsc --outDir dist/migrations migrations/*.ts",
+    "migrate": "npm run build:migrations && knex migrate:latest",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
@@ -22,7 +24,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "module-alias": "^2.2.3",
     "@hono/node-server": "^1.4.0",
+    "@hono/zod-validator": "^0.5.0",
+    "env-var": "^7.5.0",
     "hono": "^4.0.0",
     "knex": "^3.1.0",
     "minio": "^7.1.0",
@@ -32,6 +37,7 @@
     "zod": "^3.22.0"
   },
   "devDependencies": {
+    "@types/module-alias": "^2.0.4",
     "@types/multer": "^1.4.7",
     "@types/node": "^20.12.0",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
