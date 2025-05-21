@@ -37,8 +37,8 @@ RUN npm run build
 # Stage 3: Production stage
 FROM node:20-alpine AS production
 
-# Install dependencies required for the health check and database connection
-RUN apk --no-cache add curl postgresql-client
+# Install dependencies required for the health check, database connection, and video thumbnail generation
+RUN apk --no-cache add curl postgresql-client ffmpeg
 
 # Set working directory
 WORKDIR /app

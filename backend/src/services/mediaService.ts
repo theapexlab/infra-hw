@@ -1,20 +1,13 @@
 import db from '../config/database';
 import { minioClient, BUCKET_NAME } from '../config/storage';
 import { config } from '../config/env';
-import { generatePublicUrl } from './storageService';
+import { generatePublicUrl, generateUniqueFilename } from './storageService';
+import { generateVideoThumbnail } from './thumbnailService';
 import type { MediaItem, PaginatedResponse } from 'shared-types';
 import path from 'path';
-import crypto from 'crypto';
+import { Readable } from 'stream';
 
-/**
- * Generate a unique filename for uploaded media
- */
-const generateUniqueFilename = (originalName: string): string => {
-  const ext = path.extname(originalName);
-  const timestamp = Date.now();
-  const randomString = crypto.randomBytes(8).toString('hex');
-  return `${timestamp}-${randomString}${ext}`;
-};
+// Using generateUniqueFilename from storageService instead of duplicating it here
 
 /**
  * Determine if file is a video based on mimetype
@@ -47,6 +40,16 @@ export const getMediaItems = async (
     .orderBy('created_at', 'desc')
     .limit(limit)
     .offset(offset);
+  
+  // Check for videos that need thumbnails and generate them on-demand
+  for (const item of mediaItems) {
+    if (item.type === 'video') {
+      const thumbnailUrl = await ensureVideoThumbnail(item);
+      if (thumbnailUrl) {
+        item.thumbnail_url = thumbnailUrl;
+      }
+    }
+  }
   
   // Get comments for all media items
   const mediaIds = mediaItems.map(item => item.id);
@@ -89,6 +92,70 @@ export const getMediaItems = async (
 };
 
 /**
+ * Fetch file from MinIO storage
+ * @param objectName The name of the object in MinIO
+ */
+const fetchFromMinio = async (objectName: string): Promise<Buffer> => {
+  return new Promise((resolve, reject) => {
+    let data: Buffer[] = [];
+    
+    minioClient.getObject(BUCKET_NAME, objectName)
+      .then((stream: Readable) => {
+        stream.on('data', (chunk) => {
+          data.push(chunk);
+        });
+        
+        stream.on('end', () => {
+          resolve(Buffer.concat(data));
+        });
+        
+        stream.on('error', (err) => {
+          reject(err);
+        });
+      })
+      .catch(reject);
+  });
+};
+
+/**
+ * Check if a video needs a thumbnail and generate one on-demand
+ */
+const ensureVideoThumbnail = async (mediaItem: any): Promise<string | null> => {
+  // Skip if not a video or if thumbnail already exists and is not the same as the video URL
+  if (mediaItem.type !== 'video' || 
+     (mediaItem.thumbnail_url && mediaItem.thumbnail_url !== mediaItem.url)) {
+    return mediaItem.thumbnail_url;
+  }
+  
+  try {
+    console.log(`Generating thumbnail on-demand for video: ${mediaItem.id}`);
+    
+    // Extract object name from URL (assuming URL format is /media-sharing/objectName)
+    const objectName = mediaItem.url.replace('/media-sharing/', '');
+    
+    // Fetch video content from MinIO
+    const videoBuffer = await fetchFromMinio(objectName);
+    console.log(`Fetched video content for thumbnail generation: ${objectName} (${videoBuffer.length} bytes)`);
+    
+    // Generate thumbnail
+    const thumbnailName = await generateVideoThumbnail(videoBuffer, objectName);
+    const thumbnailUrl = generatePublicUrl(thumbnailName);
+    
+    // Update database record with new thumbnail URL
+    await db('media_items')
+      .where('id', mediaItem.id)
+      .update({ thumbnail_url: thumbnailUrl });
+    
+    console.log(`Generated on-demand thumbnail for video ${mediaItem.id}: ${thumbnailUrl}`);
+    
+    return thumbnailUrl;
+  } catch (error) {
+    console.error(`Failed to generate thumbnail for video ${mediaItem.id}:`, error);
+    return null;
+  }
+};
+
+/**
  * Get a single media item by ID
  */
 export const getMediaById = async (id: string): Promise<MediaItem | null> => {
@@ -99,6 +166,14 @@ export const getMediaById = async (id: string): Promise<MediaItem | null> => {
   
   if (!mediaItem) {
     return null;
+  }
+
+  // If this is a video, ensure it has a thumbnail (generate on-demand if needed)
+  if (mediaItem.type === 'video') {
+    const thumbnailUrl = await ensureVideoThumbnail(mediaItem);
+    if (thumbnailUrl) {
+      mediaItem.thumbnail_url = thumbnailUrl;
+    }
   }
   
   const comments = await db('comments')
@@ -152,17 +227,21 @@ export const uploadMedia = async (
       'Content-Type': file.mimetype,
     }
   );
-  
-  // Generate public URL for the uploaded file using our helper function
-  // This ensures proper URL formatting without double slashes
+
+  // Generate public URL for the uploaded file
   const fileUrl = generatePublicUrl(filename);
+  
+  // We no longer generate thumbnails during upload - they will be generated on-demand
+  // Set thumbnailUrl to null for all media types - thumbnails for videos will be generated
+  // when they are first accessed via the /api/media endpoint
+  const thumbnailUrl = null;
   
   // Insert record into database
   const [mediaItem] = await db('media_items')
     .insert({
       type,
       url: fileUrl,
-      thumbnail_url: type === 'video' ? fileUrl : null, // In a real app, we'd generate a thumbnail for videos
+      thumbnail_url: thumbnailUrl,
       uploader_name: uploaderName,
       description
     })
