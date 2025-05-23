@@ -47,9 +47,11 @@ sequenceDiagram
     participant Web
     participant API
     participant BlobStorage
+    participant DB
 
     User->>API: POST /api/upload-url
     API->>BlobStorage: GET presigned URL
+    API->>DB: Insert media item
     BlobStorage-->>API: create presigned URL
     API-->>User: return presigned URL
     User->>BlobStorage: PUT file
