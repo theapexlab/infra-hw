@@ -76,6 +76,38 @@ export interface PresignedUrlResponse {
 }
 
 /**
+ * API response for error conditions
+ */
+export interface ApiErrorResponse {
+  error: string;
+  details?: string;
+}
+
+/**
+ * Types for media endpoints
+ */
+export interface GetMediaParams {
+  page?: number;
+  limit?: number;
+}
+
+/**
+ * Types for direct upload request
+ */
+export interface DirectUploadMetadata {
+  uploaderName: string;
+  description: string;
+  objectName?: string;
+}
+
+/**
+ * Response for media upload
+ */
+export interface UploadResponse {
+  mediaItem: MediaItem;
+}
+
+/**
  * Thumbnail generation options
  */
 export interface ThumbnailOptions {
@@ -103,5 +135,5 @@ export interface LogMessage {
   level: LogLevel;
   service: string;
   message: string;
-  data?: any;
+  data?: Record<string, unknown>;
 }

@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { mediaApi } from '../../services/api';
+import type { MediaItem, ApiErrorResponse } from 'shared-types';
 import '../../styles/MediaUpload.css';
+import axios from 'axios';
 
 interface MediaUploadProps {
   onUploadSuccess: () => void;
@@ -51,7 +53,7 @@ export const MediaUpload = ({ onUploadSuccess, onCancel }: MediaUploadProps) => 
     
     try {
       // Use the mediaApi service which handles token generation and upload in one flow
-      const result = await mediaApi.uploadMedia(file, uploaderName, description);
+      const result: MediaItem = await mediaApi.uploadMedia(file, uploaderName, description);
       console.log('Upload successful:', result);
       setIsUploading(false);
       onUploadSuccess();
@@ -59,7 +61,21 @@ export const MediaUpload = ({ onUploadSuccess, onCancel }: MediaUploadProps) => 
       console.error('Upload failed:', error);
       let errorMessage = 'Upload failed';
       
-      if (error instanceof Error) {
+      // Handle different error types, including our API error response format
+      if (axios.isAxiosError(error)) {
+        // Handle axios errors with our ApiErrorResponse format
+        const apiError = error.response?.data as ApiErrorResponse;
+        if (apiError && apiError.error) {
+          errorMessage = apiError.error;
+          
+          // Include additional error details if provided
+          if (apiError.details) {
+            errorMessage += `: ${apiError.details}`;
+          }
+        } else {
+          errorMessage = error.message;
+        }
+      } else if (error instanceof Error) {
         errorMessage = error.message;
       } else if (typeof error === 'object' && error !== null && 'message' in error) {
         errorMessage = String(error.message);

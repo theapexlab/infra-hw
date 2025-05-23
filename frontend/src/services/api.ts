@@ -1,6 +1,13 @@
 import axios from 'axios';
 import { API_ENDPOINTS, API_BASE_URL } from './apiConfig';
-import type { MediaItem, PaginatedResponse, Comment } from 'shared-types';
+import type { 
+  MediaItem, 
+  PaginatedResponse, 
+  Comment, 
+  PresignedUrlResponse, 
+  GetMediaParams,
+  UploadResponse
+} from 'shared-types';
 
 // Create a base axios instance
 const api = axios.create({
@@ -51,8 +58,9 @@ const pollForMediaItem = async (mediaId: string, maxAttempts: number = 5): Promi
 export const mediaApi = {
   // Get paginated media items
   getMedia: async (page: number = 1, limit: number = 12): Promise<PaginatedResponse<MediaItem>> => {
+    const params: GetMediaParams = { page, limit };
     const response = await api.get(API_ENDPOINTS.MEDIA.LIST, {
-      params: { page, limit }
+      params
     });
     return response.data;
   },
@@ -70,7 +78,8 @@ export const mediaApi = {
         'Content-Type': 'multipart/form-data'
       }
     });
-    return response.data;
+    const uploadResponse = response.data as UploadResponse;
+    return uploadResponse.mediaItem;
   },
   
   // Upload a new media item using presigned URL approach
@@ -86,7 +95,7 @@ export const mediaApi = {
     });
     
     // Extract the presigned URL and mediaId from the response
-    const { presignedUrl, mediaId, objectName } = getUrlResponse.data;
+    const { presignedUrl, mediaId, objectName } = getUrlResponse.data as PresignedUrlResponse;
     console.log('Received presigned URL and media ID:', { presignedUrl, mediaId, objectName });
     
     // Step 2: Upload the file directly to MinIO using the presigned URL
