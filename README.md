@@ -11,6 +11,8 @@ This repository contains the code for the Apex Infra Homework, which is a media 
 * Code changes are out of scope, the developers have not followed best practices during development, thus any alteration could lead to a problematic deployment.
 * Focus on analyzing the Dockerfiles, Composefile and the provided build scripts to understand the application, along with any other non-source code files.
 * It is encouraged to replace services with AWS native alternatives, wherever feasible.
+* Provide a brief documentation(not longer than 1 page) on the design decisions you made.
+* Provide a diagram of the final infrastructure.
 
 ### Advanced tasks
 
