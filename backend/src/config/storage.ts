@@ -22,21 +22,6 @@ export const initializeStorage = async (): Promise<void> => {
   if (!bucketExists) {
     await minioClient.makeBucket(BUCKET_NAME, config.storage.region);
     console.log(`Created bucket: ${BUCKET_NAME}`);
-    
-    // Set bucket policy to allow public access to objects
-    const policy = {
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Principal: '*',
-          Action: ['s3:GetObject'],
-          Resource: [`arn:aws:s3:::${BUCKET_NAME}/*`]
-        }
-      ]
-    };
-    
-    await minioClient.setBucketPolicy(BUCKET_NAME, JSON.stringify(policy));
   } else {
     console.log(`Bucket ${BUCKET_NAME} already exists`);
   }

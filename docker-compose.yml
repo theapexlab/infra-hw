@@ -56,8 +56,13 @@ services:
       mc mb --ignore-existing myminio/media-sharing;
       mc mb --ignore-existing myminio/frontend-assets;
       
-      # Set public access permissions using anonymous command
-      mc anonymous set download myminio/media-sharing;
+      # Create bucket policy file for media-sharing
+      echo '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":"*","Action":["s3:GetObject"],"Resource":["arn:aws:s3:::media-sharing/*"]}]}' > /tmp/media-sharing-policy.json
+      
+      # Apply the bucket policy
+      mc policy set-json /tmp/media-sharing-policy.json myminio/media-sharing;
+      
+      # Set public access permissions for frontend-assets
       mc anonymous set download myminio/frontend-assets;
       
       # Create latest directory for frontend assets
@@ -100,8 +105,8 @@ services:
       BLOB_STORAGE_REGION: eu-west-1
       BLOB_STORAGE_PUBLIC_URL: localhost
       BLOB_STORAGE_INTERNAL_ENDPOINT: localhost
-      TRUSTED_ORIGINS: *
-      ALLOWED_HEADERS: *
+      TRUSTED_ORIGINS: "*"
+      ALLOWED_HEADERS: "*"
     depends_on:
       postgres:
         condition: service_healthy
