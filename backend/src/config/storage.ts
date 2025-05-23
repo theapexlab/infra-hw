@@ -1,21 +1,36 @@
 import { Client } from 'minio';
 import { config } from './env';
+import { AwsCredentials, getEcsCredentials } from '../utils/ecsCredentials';
 
 // Configure the MinIO client - using only the internal Docker network name
-const minioClient = new Client({
-  endPoint: config.storage.internalEndpoint || 'minio',
-  port: config.storage.port,
-  useSSL: config.storage.useSSL,
-  accessKey: config.storage.accessKey,
-  secretKey: config.storage.secretKey,
-  pathStyle: true
-});
+let minioClient: Client;
+
+
 
 // Bucket name for media storage
 const BUCKET_NAME = config.storage.bucket;
 
 // Ensure bucket exists on startup
 export const initializeStorage = async (): Promise<void> => {
+  let credentials: AwsCredentials = {
+    accessKeyId: config.storage.accessKey,
+    secretAccessKey: config.storage.secretKey,
+    sessionToken: '',
+    expiration: ''
+  };
+  if (config.storage.accessKey === '' || config.storage.secretKey === '') {
+    console.log("We're running in ECS.")
+    credentials = await getEcsCredentials();
+  }
+  minioClient = new Client({
+    endPoint: config.storage.internalEndpoint || 'minio',
+    port: config.storage.port,
+    useSSL: config.storage.useSSL,
+    accessKey: credentials.accessKeyId,
+    secretKey: credentials.secretAccessKey,
+    sessionToken: credentials.sessionToken === '' ? undefined : credentials.sessionToken,
+    pathStyle: true
+  });
   // Check if bucket exists
   const bucketExists = await minioClient.bucketExists(BUCKET_NAME);
   
