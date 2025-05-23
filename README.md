@@ -19,6 +19,11 @@ This repository contains the code for the Apex Infra Homework, which is a media 
 * The application is vulnerable to SQL injection attacks. Provide a solution in the AWS infrastructure to mitigate this.
 * The application is vulnerable to CSRF attacks. Provide a solution in the AWS infrastructure to mitigate this.
 
+### Notes
+
+* Customer team has already made preparations for deploying on AWS. If you do not specify blob storage credentials,
+the backend will try to retrieve them from the ECS task metadata endpoint.
+
 ### Architecture
 
 The customer provided you with the following architectural diagram.
