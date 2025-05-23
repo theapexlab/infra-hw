@@ -6,6 +6,9 @@ import env from 'env-var';
 export const config = {
   server: {
     port: env.get('PORT').default('3000').asPortNumber(),
+    trusted_origins: env.get('TRUSTED_ORIGINS').default('http://localhost:3000').asArray(),
+    allowed_headers: env.get('ALLOWED_HEADERS').default('*').asArray(),
+    
   },
   
   database: {

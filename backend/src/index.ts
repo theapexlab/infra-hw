@@ -17,8 +17,8 @@ app.use('*', honoLogger());
 
 // CORS configuration
 app.use('*', cors({
-  origin: '*',
-  allowHeaders: ['*'],
+  origin: config.server.trusted_origins,
+  allowHeaders: config.server.allowed_headers,
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   exposeHeaders: ['Content-Length', 'Content-Type'],
   maxAge: 86400,

@@ -9,8 +9,13 @@ This repository contains the code for the Apex Infra Homework, which is a media 
 * Create IaC in terraform to deploy the application to AWS
 * Ensure that the application is deployed with AWS best practices in mind.
 * Code changes are out of scope, the developers have not followed best practices during development, thus any alteration could lead to a problematic deployment.
-* Focus on analyzing the Dockerfiles, Composefile and the provided build scripts to understand the application, along with any other non-source code files to understand the application.
+* Focus on analyzing the Dockerfiles, Composefile and the provided build scripts to understand the application, along with any other non-source code files.
+* It is encouraged to replace services with AWS native alternatives, wherever feasible.
 
+### Advanced tasks
+
+* The application is vulnerable to SQL injection attacks. Provide a solution in the AWS infrastructure to mitigate this.
+* The application is vulnerable to CSRF attacks. Provide a solution in the AWS infrastructure to mitigate this.
 
 ### Architecture
 

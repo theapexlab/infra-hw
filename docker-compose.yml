@@ -97,11 +97,11 @@ services:
       BLOB_STORAGE_ACCESS_KEY: minioadmin
       BLOB_STORAGE_SECRET_KEY: minioadmin
       BLOB_STORAGE_BUCKET: media-sharing
-      BLOB_STORAGE_REGION: us-east-1
-      # Use public host URL for browser access - must be accessible from both backend container and browser
+      BLOB_STORAGE_REGION: eu-west-1
       BLOB_STORAGE_PUBLIC_URL: localhost
-      # We need a separate endpoint variable for internal operations
       BLOB_STORAGE_INTERNAL_ENDPOINT: localhost
+      TRUSTED_ORIGINS: *
+      ALLOWED_HEADERS: *
     depends_on:
       postgres:
         condition: service_healthy
